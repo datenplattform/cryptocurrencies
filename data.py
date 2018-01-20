@@ -1,19 +1,57 @@
 import matplotlib.pyplot as plt
-import datetime
 import pandas as pd
+import numpy as np
+from keras.models import Sequential
+from keras.layers import Activation, Dense
+from keras.layers import LSTM
+from keras.layers import Dropout
 
-data = pd.read_csv('http://localhost:5000/api/rest/currencies/bitcoin.csv')
+np.random.seed(202)
 
-fig, (ax1, ax2) = plt.subplots(2, 1, gridspec_kw={'height_ratios': [3, 1]})
-ax1.set_ylabel('Closing Price ($)', fontsize=12)
-ax2.set_ylabel('Volume ($ bn)', fontsize=12)
-ax2.set_yticks([int('%d000000000' % i) for i in range(10)])
-ax2.set_yticklabels(range(10))
-ax1.set_xticks([datetime.date(i, j, 1) for i in range(2013, 2019) for j in [1, 7]])
-ax1.set_xticklabels('')
-ax2.set_xticks([datetime.date(i, j, 1) for i in range(2013, 2019) for j in [1, 7]])
-ax2.set_xticklabels([datetime.date(i, j, 1).strftime('%b %Y') for i in range(2013, 2019) for j in [1, 7]])
-ax1.plot(data['Date'].astype(datetime.datetime), data['Open'])
-ax2.bar(data['Date'].astype(datetime.datetime).values, data['Volume'].values)
-fig.tight_layout()
-plt.show()
+
+def build_model(inputs, output_size, neurons, activ_func="linear", dropout=0.25, loss="mae", optimizer="adam"):
+    model = Sequential()
+
+    model.add(LSTM(neurons, input_shape=(inputs.shape[1], inputs.shape[2])))
+    model.add(Dropout(dropout))
+    model.add(Dense(units=output_size))
+    model.add(Activation(activ_func))
+
+    model.compile(loss=loss, optimizer=optimizer)
+    return model
+
+
+model_data = pd.read_csv('http://localhost:5000/api/rest/currencies/bitcoin.csv')
+split_date = '2017-06-01'
+window_len = 10
+norm_cols = ['Close', 'Volume']
+
+training_set, test_set = model_data[model_data['Date'] < split_date], model_data[model_data['Date'] >= split_date]
+training_set = training_set.drop('Date', 1)
+test_set = test_set.drop('Date', 1)
+
+LSTM_training_inputs = []
+for i in range(len(training_set) - window_len):
+    temp_set = training_set[i:(i + window_len)].copy()
+    for col in norm_cols:
+        temp_set.loc[:, col] = temp_set[col] / temp_set[col].iloc[0] - 1
+    LSTM_training_inputs.append(temp_set)
+
+LSTM_test_inputs = []
+for i in range(len(test_set) - window_len):
+    temp_set = test_set[i:(i + window_len)].copy()
+    for col in norm_cols:
+        temp_set.loc[:, col] = temp_set[col] / temp_set[col].iloc[0] - 1
+    LSTM_test_inputs.append(temp_set)
+LSTM_test_outputs = (test_set['Close'][window_len:].values / test_set['Close'][:-window_len].values) - 1
+
+LSTM_training_inputs = [np.array(LSTM_training_input) for LSTM_training_input in LSTM_training_inputs]
+LSTM_training_inputs = np.array(LSTM_training_inputs)
+
+LSTM_test_inputs = [np.array(LSTM_test_inputs) for LSTM_test_inputs in LSTM_test_inputs]
+LSTM_test_inputs = np.array(LSTM_test_inputs)
+
+model = build_model(LSTM_training_inputs, output_size=1, neurons=20)
+LSTM_training_outputs = (training_set['Close'][window_len:].values / training_set['Close'][:-window_len].values) - 1
+
+history = model.fit(LSTM_training_inputs, LSTM_training_outputs, epochs=2, batch_size=1, verbose=2, shuffle=True)

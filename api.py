@@ -29,6 +29,8 @@ def get_historical_data(currency):
     df.loc[df['Volume'] == "-", 'Volume'] = 0
     df['Volume'] = df['Volume'].astype('int64')
     df = df.assign(Difference=lambda x: (x['Close'] - x['Open']) / x['Open'])
+    df = df.assign(Volatility=lambda x: (x['High'] - x['Low']) / (x['Open']))
+    df = df.assign(ClosingHighPriceGap=lambda x: 2 * (x['High'] - x['Close']) / (x['High'] - x['Low']) - 1)
 
     return df
 
