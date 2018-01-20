@@ -1,8 +1,10 @@
 import pandas as pd
 import time
 from flask import Flask, jsonify, make_response
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 
 def create_response(data, content_type):
@@ -32,7 +34,7 @@ def get_historical_data(currency):
     df = df.assign(Volatility=lambda x: (x['High'] - x['Low']) / (x['Open']))
     df = df.assign(ClosingHighPriceGap=lambda x: 2 * (x['High'] - x['Close']) / (x['High'] - x['Low']) - 1)
 
-    return df
+    return df.iloc[::-1]
 
 
 @app.route("/api/rest")
