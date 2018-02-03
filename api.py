@@ -27,7 +27,6 @@ def get_historical_data(currency):
     items = pd.read_html(url)
 
     df = items[0]
-    df = df.assign(Date=pd.to_datetime(df['Date']))
     df.loc[df['Volume'] == "-", 'Volume'] = 0
     df['Volume'] = df['Volume'].astype('int64')
     df = df.assign(Difference=lambda x: (x['Close'] - x['Open']) / x['Open'])
